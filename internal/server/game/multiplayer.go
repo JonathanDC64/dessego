@@ -20,21 +20,8 @@ type finaliseMultiplayReq struct {
 	Version     int    `form:"ver"`
 }
 
-func (f finaliseMultiplayReq) Grade() character.MultiplayerGrade {
-	switch {
-	case f.GradeS == 1:
-		return character.GradeS
-	case f.GradeA == 1:
-		return character.GradeA
-	case f.GradeB == 1:
-		return character.GradeB
-	case f.GradeC == 1:
-		return character.GradeC
-	case f.GradeD == 1:
-		return character.GradeD
-	default:
-		return character.GradeUnknown
-	}
+func (f finaliseMultiplayReq) Grades() character.GradeCounts {
+	return character.GradeCounts{S: f.GradeS, A: f.GradeA, B: f.GradeB, C: f.GradeC, D: f.GradeD}
 }
 
 // swagger:model updateOtherPlayerGradeReq
@@ -225,17 +212,20 @@ func (s *Server) finaliseMultiplayHandler() http.HandlerFunc {
 			return
 		}
 
-		grade := fmr.Grade()
-		if err = s.cs.UpdatePlayerGrade(fmr.CharacterID, grade); err != nil {
+		grades := fmr.Grades()
+		if err = grades.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err = s.cs.UpdatePlayerGrades(fmr.CharacterID, grades); err != nil {
 			s.l.Err(err).Msg("")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		s.l.Info().Msgf(
-			"character %q finished a multiplayer session and got grade %q",
-			fmr.CharacterID,
-			grade,
-		)
+		s.l.Info().Str("character", fmr.CharacterID).
+			Int("grade_s", grades.S).Int("grade_a", grades.A).
+			Int("grade_b", grades.B).Int("grade_c", grades.C).Int("grade_d", grades.D).
+			Msg("finished a multiplayer session")
 
 		if err = transport.WriteResponse(
 			w, transport.ResponseFinaliseMultiplayer, []byte{0x01},

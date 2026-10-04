@@ -41,6 +41,9 @@ type Characters interface {
 
 	// UpdatePlayerGrade updates the given player with the given grade.
 	UpdatePlayerGrade(id string, grade character.MultiplayerGrade) error
+
+	// UpdatePlayerGrades atomically adds all rating counts in a completion report.
+	UpdatePlayerGrades(id string, grades character.GradeCounts) error
 }
 
 // State is the interface that wraps methods that types must implement to be

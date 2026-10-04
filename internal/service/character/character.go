@@ -34,6 +34,31 @@ var Grades = map[int]MultiplayerGrade{
 	4: GradeD,
 }
 
+// GradeCounts contains the rating increments reported at multiplayer completion.
+// A three-player session can report two ratings in one bucket, and different
+// players can contribute to different buckets in the same report.
+type GradeCounts struct {
+	S int
+	A int
+	B int
+	C int
+	D int
+}
+
+// MaxGradeCount is the largest total representable in the signed 32-bit
+// statistics returned to the game client.
+const MaxGradeCount = 1<<31 - 1
+
+// Validate rejects negative counts and values outside the response wire format.
+func (g GradeCounts) Validate() error {
+	for i, count := range [...]int{g.S, g.A, g.B, g.C, g.D} {
+		if count < 0 || count > MaxGradeCount {
+			return fmt.Errorf("invalid multiplayer rating count in bucket %d: %d", i, count)
+		}
+	}
+	return nil
+}
+
 // Stats represents a characters statistics.
 type Stats struct {
 	GradeS   int

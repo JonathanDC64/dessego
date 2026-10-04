@@ -217,21 +217,56 @@ func (s *SQLiteService) InitMultiplayer(id string) error {
 
 // UpdatePlayerGrade updates the given player with the given grade.
 func (s *SQLiteService) UpdatePlayerGrade(id string, grade MultiplayerGrade) error {
-	// SQL parameters represent values, not column names. Only known grade
-	// constants may select a column; a session without a rating is a no-op.
+	// Convert the validated single rating into the same atomic count update used
+	// by completion reports; a session without a rating remains a no-op.
+	var counts GradeCounts
 	switch grade {
 	case GradeUnknown:
 		return nil
-	case GradeS, GradeA, GradeB, GradeC, GradeD:
+	case GradeS:
+		counts.S = 1
+	case GradeA:
+		counts.A = 1
+	case GradeB:
+		counts.B = 1
+	case GradeC:
+		counts.C = 1
+	case GradeD:
+		counts.D = 1
 	default:
 		return fmt.Errorf("invalid multiplayer grade: %q", grade)
 	}
 
-	query := fmt.Sprintf("UPDATE character SET %s = %s + 1 WHERE id = ?", grade, grade)
-	if _, err := s.db.Exec(query, id); err != nil {
-		return fmt.Errorf("update player grade: %w", err)
-	}
+	return s.UpdatePlayerGrades(id, counts)
+}
 
+// UpdatePlayerGrades preserves every reported rating count in one atomic update.
+// The predicate prevents totals from overflowing the signed 32-bit wire format.
+func (s *SQLiteService) UpdatePlayerGrades(id string, grades GradeCounts) error {
+	if err := grades.Validate(); err != nil {
+		return err
+	}
+	if grades == (GradeCounts{}) {
+		return nil
+	}
+	result, err := s.db.Exec(`UPDATE character SET
+		grade_s = grade_s + ?, grade_a = grade_a + ?, grade_b = grade_b + ?,
+		grade_c = grade_c + ?, grade_d = grade_d + ?
+		WHERE id = ? AND grade_s <= ? AND grade_a <= ? AND grade_b <= ?
+		AND grade_c <= ? AND grade_d <= ?`,
+		grades.S, grades.A, grades.B, grades.C, grades.D, id,
+		MaxGradeCount-grades.S, MaxGradeCount-grades.A, MaxGradeCount-grades.B,
+		MaxGradeCount-grades.C, MaxGradeCount-grades.D)
+	if err != nil {
+		return fmt.Errorf("update player grades: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check player grade update: %w", err)
+	}
+	if n != 1 {
+		return fmt.Errorf("player grade update rejected: character missing or rating total exceeds wire limit")
+	}
 	return nil
 }
 
