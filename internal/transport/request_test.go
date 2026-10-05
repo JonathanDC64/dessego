@@ -13,7 +13,7 @@ import (
 
 // Synthetic tails reproduce native-PS3 failures without publishing player data.
 func TestDecodeRequestNativeBase64Tails(t *testing.T) {
-	for i, tail := range []string{"z%\x60\xa1\x99\xf2C8??8?P", "\xa3\xe0\xb0??%HT\x0f/8??8?", "\xe9\xea\xac;\x03\xb6?\ni???8?", "H\x8bs;\x13\x0c\xa5+\xafa\xce8?08?08", ";unused", "\x17U?\xbf%>\x84M?\xc18???\xd0", "3\xc4;\xc0"} {
+	for i, tail := range []string{"z%\x60\xa1\x99\xf2C8??8?P", "\xa3\xe0\xb0??%HT\x0f/8??8?", "\xe9\xea\xac;\x03\xb6?\ni???8?", "H\x8bs;\x13\x0c\xa5+\xafa\xce8?08?08", ";unused", "\x17U?\xbf%>\x84M?\xc18???\xd0", "3\xc4;\xc0", "unused&junk;tail", "unused&%HT&junk;tail"} {
 		for _, key := range []string{"replayData", "NPRoomID"} {
 			t.Run(fmt.Sprintf("%s/tail%d", key, i), func(t *testing.T) {
 				var got struct {
@@ -80,6 +80,10 @@ func TestTrimBase64TailsBoundaries(t *testing.T) {
 		{"raw plus", "replayData=+/AA==;tail&ver=100", "replayData=+/AA==&ver=100"},
 		{"encoded padding unchanged", "NPRoomID=QUJDRA%3D%3D%HT&ver=100", "NPRoomID=QUJDRA%3D%3D%HT&ver=100"},
 		{"ampersand remains delimiter", "replayData=QUJDRA==unused&characterID=bad%HT", "replayData=QUJDRA==&characterID=bad%HT"},
+		{"tail spans delimiters", "replayData=QUJDRA==unused&junk;tail&%HT&ver=100&pre=2", "replayData=QUJDRA==&ver=100&pre=2"},
+		{"tail ends at next field", "NPRoomID=QUJDRA==unused&junk;tail&characterID=a%26b&ver=100", "NPRoomID=QUJDRA==&characterID=a%26b&ver=100"},
+		{"strict ordinary field after tail", "replayData=QUJDRA==unused&junk;tail&characterID=a;b&ver=100", "replayData=QUJDRA==&characterID=a;b&ver=100"},
+		{"ordinary bare field without tail", "replayData=QUJDRA==&bad;flag&ver=100", "replayData=QUJDRA==&bad;flag&ver=100"},
 		{"ordinary field unchanged", "characterID=QUJDRA==%HT", "characterID=QUJDRA==%HT"},
 		{"exact key only", "nproomid=QUJDRA==%HT", "nproomid=QUJDRA==%HT"},
 		{"empty prefix unchanged", "replayData===%HT", "replayData===%HT"},
@@ -88,6 +92,27 @@ func TestTrimBase64TailsBoundaries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := trimBase64Tails(tc.input); got != tc.want {
 				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDecodeRequestResumesStrictParsingAfterOpaqueTail(t *testing.T) {
+	for _, body := range []string{
+		"replayData=QUJDRA==unused&junk;tail&characterID=bad%HT&ver=100",
+		"NPRoomID=QUJDRA==unused&junk;tail&characterID=a;b&ver=100",
+		"replayData=QUJDRA==unused&junk;tail&ver=100&bad;flag",
+		"replayData=QUJDRA==&bad;flag&ver=100",
+	} {
+		t.Run(body, func(t *testing.T) {
+			var got struct {
+				Replay    string `form:"replayData"`
+				Room      string `form:"NPRoomID"`
+				Character string `form:"characterID"`
+				Version   int    `form:"ver"`
+			}
+			if err := DecodeRequest(testRequestDecrypter(t), encryptTestRequest(t, body), &got); err == nil {
+				t.Fatal("accepted malformed ordinary form field")
 			}
 		})
 	}

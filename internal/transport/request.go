@@ -51,8 +51,18 @@ func DecodeRequest(rd RequestDecrypter, data []byte, v interface{}) error {
 // malformed data before padding.
 func trimBase64Tails(body string) string {
 	fields := strings.Split(body, "&")
-	for i, field := range fields {
+	cleaned := make([]string, 0, len(fields))
+	inTail := false
+	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
+		// Once an unused tail has started, an embedded '&' may split it
+		// into more fragments. Game fields use key=value; resume strict
+		// parsing at the next such field, even if its value is malformed.
+		if inTail && len(parts) != 2 {
+			continue
+		}
+		inTail = false
+		cleaned = append(cleaned, field)
 		if len(parts) != 2 || (parts[0] != "replayData" && parts[0] != "NPRoomID") {
 			continue
 		}
@@ -80,7 +90,8 @@ func trimBase64Tails(body string) string {
 		for end < len(value) && value[end] == '=' {
 			end++
 		}
-		fields[i] = parts[0] + "=" + value[:end]
+		inTail = end < len(value)
+		cleaned[len(cleaned)-1] = parts[0] + "=" + value[:end]
 	}
-	return strings.Join(fields, "&")
+	return strings.Join(cleaned, "&")
 }
