@@ -32,6 +32,11 @@ type SOS struct {
 	Ratings       []int
 	TotalSessions int
 	Updated       time.Time
+
+	// Group is the matchmaking group the sign was placed in (the client's
+	// X-DeS-Group header); "" is the public group. Signs, invasions and the
+	// Old Monk only match within a group. It is never sent to clients.
+	Group string
 }
 
 // Bytes returns a serialised version of the SOS as a byte slice.

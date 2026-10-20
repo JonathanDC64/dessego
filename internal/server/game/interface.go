@@ -119,8 +119,8 @@ type Replays interface {
 // SOS is the interface that wraps methods that types must implement to be used
 // as a service for managing SOS data.
 type SOS interface {
-	// List returns n SOS entries, from the requested list in the given block.
-	List(blockID int32, n int) []*sos.SOS
+	// List (in the given matchmaking group) returns n SOS entries, from the requested list in the given block.
+	List(blockID int32, n int, group string) []*sos.SOS
 
 	// Add adds a new SOS.
 	Add(s *sos.SOS)
@@ -133,9 +133,10 @@ type SOS interface {
 	Check(characterID string) string
 
 	// Summon returns true if the given SOS ID was able to be summoned to the
-	// given room.
-	Summon(id int32, room string) bool
+	// given room by a host in the given matchmaking group.
+	Summon(id int32, room, group string) bool
 
-	// Monk returns true if a monk was able to be summoned to the given room.
-	Monk(room string) bool
+	// Monk returns true if a monk from the given matchmaking group was able
+	// to be summoned to the given room.
+	Monk(room, group string) bool
 }
