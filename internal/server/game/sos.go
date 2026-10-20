@@ -137,7 +137,7 @@ func (s *Server) getSosDataHandler() http.HandlerFunc {
 			unknown = make([]*sos.SOS, 0, gsr.SOSNum)
 		)
 
-		for _, bs := range s.sos.List(blockID, gsr.MaxSOSNum) {
+		for _, bs := range s.sos.List(blockID, gsr.MaxSOSNum, matchGroup(r)) {
 			if inSosList(strconv.FormatUint(uint64(bs.ID), 10), sl) {
 				known = append(known, bs.ID)
 			} else {
@@ -212,6 +212,7 @@ func (s *Server) addSosDataHandler() http.HandlerFunc {
 		}
 
 		ns := asr.ToSos()
+		ns.Group = matchGroup(r)
 
 		// Populate the SOS with the stats for the player.
 		stats, err := s.cs.Stats(asr.CharacterID)
@@ -285,6 +286,9 @@ func (s *Server) checkSosDataHandler() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		// The sign follows its owner's current group.
+		s.sos.Regroup(csr.CharacterID, matchGroup(r))
 
 		data := new(bytes.Buffer)
 		if rid := s.sos.Check(csr.CharacterID); rid != "" {
@@ -370,7 +374,7 @@ func (s *Server) summonCharacterHandler() http.HandlerFunc {
 		s.l.Info().Msgf("player %q attempting to summon id %d", p, sor.GhostID)
 
 		data := []byte{0x01}
-		if !s.sos.Summon(sor.GhostID, sor.NPRoomID) {
+		if !s.sos.Summon(sor.GhostID, sor.NPRoomID, matchGroup(r)) {
 			data = []byte{0x00}
 			s.l.Info().Msgf(
 				"player %q failed to summon non-existing id %d", p, sor.GhostID,
@@ -452,7 +456,7 @@ func (s *Server) summonBlackGhostHandler() http.HandlerFunc {
 		s.l.Info().Msgf("player %q attempting to summon monk", p)
 
 		data := []byte{0x01}
-		if !s.sos.Monk(sbr.NPRoomID) {
+		if !s.sos.Monk(sbr.NPRoomID, matchGroup(r)) {
 			data = []byte{0x00}
 			s.l.Info().Msgf("player %q failed to summon monk", p)
 		}

@@ -37,8 +37,8 @@ func NewManager(l zerolog.Logger) *Manager {
 	}
 }
 
-// List returns n SOS entries in the given block.
-func (m *Manager) List(blockID int32, n int) []*SOS {
+// List returns n SOS entries in the given block and matchmaking group.
+func (m *Manager) List(blockID int32, n int, group string) []*SOS {
 	m.Lock()
 	defer m.Unlock()
 	if n <= 0 {
@@ -56,8 +56,8 @@ func (m *Manager) List(blockID int32, n int) []*SOS {
 			delete(m.pending, cid)
 			delete(m.monks, cid)
 			continue
-		} else if a.BlockID != blockID {
-			// Only include SOS for the given block.
+		} else if a.BlockID != blockID || a.Group != group {
+			// Only include SOS for the given block and group.
 			continue
 		}
 
@@ -87,6 +87,24 @@ func (m *Manager) Delete(characterID string) {
 	defer m.Unlock()
 
 	delete(m.active, characterID)
+	delete(m.pending, characterID)
+	delete(m.monks, characterID)
+}
+
+// Regroup moves a character's active SOS to the given matchmaking group. The
+// owner's client polls checkSosData while its sign is down, so a password
+// changed after the sign went down takes the sign along. A summon agreed in
+// the old group is dropped.
+func (m *Manager) Regroup(characterID, group string) {
+	m.Lock()
+	defer m.Unlock()
+
+	a, ok := m.active[characterID]
+	if !ok || a.Group == group {
+		return
+	}
+	m.l.Info().Msgf("moved SOS %d to another matchmaking group", a.ID)
+	a.Group = group
 	delete(m.pending, characterID)
 	delete(m.monks, characterID)
 }
@@ -124,14 +142,15 @@ func (m *Manager) Check(characterID string) string {
 	return ""
 }
 
-// Summon returns true if the given SOS ID was able to be summoned.
-func (m *Manager) Summon(id int32, room string) bool {
+// Summon returns true if the given SOS ID was able to be summoned by a host
+// in the given matchmaking group.
+func (m *Manager) Summon(id int32, room, group string) bool {
 	m.Lock()
 	defer m.Unlock()
 
 	for _, a := range m.active {
 		if a.ID == id {
-			if a.Updated.Add(maxSOSAge).Before(time.Now()) || room == "" {
+			if a.Updated.Add(maxSOSAge).Before(time.Now()) || room == "" || a.Group != group {
 				return false
 			}
 			if _, ok := m.monks[a.CharacterID]; ok {
@@ -153,13 +172,14 @@ func (m *Manager) Summon(id int32, room string) bool {
 	return false
 }
 
-// Monk returns true if a monk was able to be summoned to the given room.
-func (m *Manager) Monk(room string) bool {
+// Monk returns true if a monk from the given matchmaking group was able to be
+// summoned to the given room.
+func (m *Manager) Monk(room, group string) bool {
 	m.Lock()
 	defer m.Unlock()
 
 	for _, a := range m.active {
-		if monkBlock(a.BlockID) && !a.Updated.Add(maxSOSAge).Before(time.Now()) && room != "" {
+		if monkBlock(a.BlockID) && a.Group == group && !a.Updated.Add(maxSOSAge).Before(time.Now()) && room != "" {
 			if _, ok := m.pending[a.CharacterID]; ok {
 				continue
 			}
