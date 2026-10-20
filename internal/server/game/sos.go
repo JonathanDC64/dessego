@@ -287,6 +287,9 @@ func (s *Server) checkSosDataHandler() http.HandlerFunc {
 			return
 		}
 
+		// The sign follows its owner's current group.
+		s.sos.Regroup(csr.CharacterID, matchGroup(r))
+
 		data := new(bytes.Buffer)
 		if rid := s.sos.Check(csr.CharacterID); rid != "" {
 			data.WriteString(rid)

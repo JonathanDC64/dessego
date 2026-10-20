@@ -91,6 +91,24 @@ func (m *Manager) Delete(characterID string) {
 	delete(m.monks, characterID)
 }
 
+// Regroup moves a character's active SOS to the given matchmaking group. The
+// owner's client polls checkSosData while its sign is down, so a password
+// changed after the sign went down takes the sign along. A summon agreed in
+// the old group is dropped.
+func (m *Manager) Regroup(characterID, group string) {
+	m.Lock()
+	defer m.Unlock()
+
+	a, ok := m.active[characterID]
+	if !ok || a.Group == group {
+		return
+	}
+	m.l.Info().Msgf("moved SOS %d to another matchmaking group", a.ID)
+	a.Group = group
+	delete(m.pending, characterID)
+	delete(m.monks, characterID)
+}
+
 // Check checks for a matching player to fulfill an SOS and returns the ID
 // of the room for the match.
 func (m *Manager) Check(characterID string) string {

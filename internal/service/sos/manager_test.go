@@ -149,3 +149,26 @@ func TestManagerMatchesOnlyWithinGroup(t *testing.T) {
 		}
 	}
 }
+
+func TestManagerRegroupMovesSign(t *testing.T) {
+	m := NewManager(zerolog.Nop())
+	sign := &SOS{CharacterID: "helper", BlockID: 40070, Updated: time.Now()}
+	m.Add(sign)
+	if !m.Summon(sign.ID, "public-room", "") {
+		t.Fatal("failed to summon in the public group")
+	}
+	m.Regroup("helper", "ab12")
+	if n := len(m.List(40070, 10, "")); n != 0 {
+		t.Fatalf("public list still shows %d signs", n)
+	}
+	if n := len(m.List(40070, 10, "ab12")); n != 1 {
+		t.Fatalf("the new group's list shows %d signs, want 1", n)
+	}
+	if room := m.Check("helper"); room != "" {
+		t.Fatalf("summon from the old group kept: room = %q", room)
+	}
+	if m.Summon(sign.ID, "room", "") || !m.Summon(sign.ID, "room", "ab12") {
+		t.Fatal("summon does not follow the new group")
+	}
+	m.Regroup("nobody", "ab12") // no sign: nothing happens
+}

@@ -114,3 +114,29 @@ func TestGetSOSMatchesGroupHeader(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckSOSMovesSignToGroup(t *testing.T) {
+	m := sos.NewManager(zerolog.Nop())
+	m.Add(&sos.SOS{CharacterID: "helper", BlockID: 60070})
+	m.Check("helper")
+	s := &Server{sos: m, rd: sosPlaintextDecrypter{}, l: zerolog.Nop()}
+	check := func(header string) {
+		r := httptest.NewRequest(http.MethodPost, "/cgi-bin/checkSosData.spd", strings.NewReader("characterID=helper"))
+		if header != "" {
+			r.Header.Set(clientOptionsHeader, header)
+		}
+		w := httptest.NewRecorder()
+		s.checkSosDataHandler()(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status %d", w.Code)
+		}
+	}
+	check("group=ab12")
+	if len(m.List(60070, 10, "")) != 0 || len(m.List(60070, 10, "ab12")) != 1 {
+		t.Fatal("sign did not move to the owner's group")
+	}
+	check("")
+	if len(m.List(60070, 10, "")) != 1 || len(m.List(60070, 10, "ab12")) != 0 {
+		t.Fatal("sign did not move back to the public group")
+	}
+}

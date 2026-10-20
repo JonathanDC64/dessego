@@ -128,6 +128,9 @@ type SOS interface {
 	// Delete deletes the SOS for a given character.
 	Delete(characterID string)
 
+	// Regroup moves a character's active SOS to the given matchmaking group.
+	Regroup(characterID, group string)
+
 	// Check checks for a matching player to fulfill an SOS and returns the ID
 	// of the room for the match.
 	Check(characterID string) string
